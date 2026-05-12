@@ -23,7 +23,7 @@
 
 ## Quick start
 
-- **Open in Cursor:** File → Open Folder → `c:\LLM Projects\Security_Automation_Projects`
+- File → Open Folder → `c:\LLM Projects\Security_Automation_Projects`
 - **Remote:** [github.com/as70023333/Security_Automation_Projects](https://github.com/as70023333/Security_Automation_Projects) (branch `main`)
 
 Created 2026-05-11.
