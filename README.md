@@ -1,4 +1,9 @@
-﻿# MyWorkspace
+# MyWorkspace
 
-Local workspace created 2026-05-11. Connect this folder to GitHub using the steps in this README or run `gh repo create` from this directory after `gh auth login`. 
+Local folder on disk, tracked with Git and linked to GitHub.
+
+- **Open in Cursor:** File → Open Folder → `c:\LLM Projects\MyWorkspace`
+- **Remote:** `origin` → GitHub (branch `main`)
+
+Created 2026-05-11. 
 
