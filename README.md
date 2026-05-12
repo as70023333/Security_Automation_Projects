@@ -1,6 +1,6 @@
-# Security_Automation_Projects
+# Enterprise Security Automation Portfolio
 
-Local workspace for security automation work, tracked with Git and linked to GitHub.
+**Repository:** `Security_Automation_Projects` — local workspace for security automation engineering, tracked with Git and linked to GitHub.
 
 ## Layout
 
@@ -15,7 +15,7 @@ Local workspace for security automation work, tracked with Git and linked to Git
 
 | Path | Purpose |
 |------|---------|
-| `README.md` | Project overview and how to use this repo |
+| `README.md` | Portfolio overview and how to use this repo |
 | `docs/` | Design notes, runbooks, ADRs, references |
 | `scripts/` | Automation and bootstrap scripts |
 | `diagrams/` | Architecture and flow diagrams (source exports) |
