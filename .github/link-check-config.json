@@ -1,0 +1,13 @@
+{
+  "timeout": "25s",
+  "retryOn429": true,
+  "retryCount": 3,
+  "fallbackRetryDelay": "15s",
+  "aliveStatusCodes": [200, 206, 301, 302, 403],
+  "ignorePatterns": [
+    { "pattern": "^https://img.shields.io/" },
+    { "pattern": "^https://badgen.net/" },
+    { "pattern": "^https://shields.io/" },
+    { "pattern": "^https://github.com/.*/(issues|pull|compare|commits|actions|security)/" }
+  ]
+}

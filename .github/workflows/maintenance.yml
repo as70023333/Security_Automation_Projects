@@ -1,0 +1,35 @@
+name: Maintenance
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly: Mondays 15:00 UTC (badges + external docs drift)
+    - cron: "0 15 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: maintenance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  markdown-link-check:
+    name: Markdown link check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install markdown-link-check
+        run: npm install -g markdown-link-check@3.12.2
+
+      - name: Check all Markdown files
+        run: |
+          set -euo pipefail
+          find . -name '*.md' -not -path './.git/*' -print0 | sort -z | xargs -0 -r -n1 markdown-link-check -q -c .github/link-check-config.json
