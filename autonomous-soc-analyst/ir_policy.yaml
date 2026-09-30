@@ -1,0 +1,191 @@
+# =============================================================================
+# Incident Response policy for the Autonomous SOC Analyst (Tier-1)
+#
+# The agent never improvises: every classification, containment action and
+# escalation decision it takes is driven by this file. Change it here, not in code.
+# The file is integrity-monitored; run `python -m soc_agent admin seal` after edits.
+# =============================================================================
+version: 1
+organization: Contoso
+sla_seconds: 28
+default_class: suspicious_activity
+
+triage:
+  # Hash/IP is "malicious" when this many independent feeds agree
+  # (or one feed is highly confident, score >= 90).
+  min_malicious_sources: 2
+  # Composite risk score (0-100) at/above which the alert is a true positive.
+  true_positive_score: 60
+
+escalation:
+  # Page infrastructure + security on-call immediately.
+  page_severities: [critical]
+  # Page for these severities only when the agent could NOT fully contain
+  # (an action failed, timed out, was halted, or awaits approval).
+  page_if_containment_incomplete: [high]
+  # Undetermined verdicts at these severities are paged instead of queued.
+  page_on_undetermined: [critical]
+  # Post auto-closed false positives to the queue channel (digest noise).
+  notify_false_positives: false
+
+guardrails:
+  # Regex on hostname (and short name). Isolation of these requires approval.
+  protected_hosts:
+    - '^dc\d*$'
+    - '^(srv-)?(adfs|pki|ca)\d*$'
+    - '^srv-sql-prod'
+  # Never disabled by the agent (break-glass / emergency accounts).
+  protected_accounts:
+    - '^breakglass'
+    - '^svc-emergency'
+  # Disabling these requires human approval (also any Entra directory role / AD admin group).
+  privileged_accounts:
+    - '^admin\.'
+    - '^adm-'
+  # Actions that always need a human click, regardless of verdict.
+  approval_required_actions: []
+  # Never pushed to the firewall (identity providers, public DNS, your egress IPs...).
+  never_block_cidrs:
+    - 20.190.128.0/18     # Microsoft Entra ID sign-in
+    - 40.126.0.0/18       # Microsoft Entra ID sign-in
+    - 8.8.8.8/32
+    - 1.1.1.1/32
+  block_suspicious_ips: false
+  # Block public IPs contacted by a process whose hash is confirmed malicious,
+  # even when threat intel has no opinion on the IP (likely fresh C2).
+  block_unknown_ips_contacted_by_malware: true
+  max_targets_per_action: 5
+  # Blast-radius limits. Over the limit, further actions wait for approval.
+  max_actions_per_hour:
+    isolate_device: 10
+    disable_user: 5
+    block_ip: 50
+    stop_and_quarantine_file: 50
+  # Undo fast-path isolation automatically when the verdict is false positive.
+  auto_release_on_false_positive: true
+  # Known-good hashes (internal tools). Always treated as benign.
+  allowlisted_hashes: []
+
+# -----------------------------------------------------------------------------
+# Alert classes (first match by ascending priority wins).
+#   immediate_actions     - fire the moment the alert arrives, before enrichment
+#   true_positive_actions - fire once the verdict is TRUE POSITIVE
+#   undetermined_actions  - evidence gathering when the verdict is unclear
+# Available actions: isolate_device, stop_and_quarantine_file, block_ip,
+#   disable_user, collect_investigation_package, run_av_scan
+# -----------------------------------------------------------------------------
+alert_classes:
+  - name: ransomware
+    description: Encryption / extortion malware. Contain first, ask later.
+    priority: 10
+    match:
+      categories: [Ransomware]
+      keywords: [ransomware, ransom note, lockbit, blackcat, alphv, akira, "file encryption"]
+      mitre_techniques: [T1486, T1490]
+    base_severity: critical
+    true_positive_min_severity: critical
+    immediate_actions: [isolate_device]
+    true_positive_actions:
+      [isolate_device, stop_and_quarantine_file, block_ip, disable_user, collect_investigation_package]
+    undetermined_actions: [collect_investigation_package]
+    always_page: true
+    next_steps:
+      - Confirm isolation held and check file servers / shares mapped by the host for encryption activity.
+      - Reset the affected user's password and review their sign-ins for the last 7 days.
+      - Check backups for the affected systems and preserve the investigation package.
+      - Hunt for the same hash and C2 IPs across the fleet (Advanced Hunting).
+
+  - name: credential_theft
+    description: Credential dumping / hack tools on a host (e.g. LSASS access).
+    priority: 20
+    match:
+      categories: [CredentialAccess]
+      keywords: [mimikatz, lsass, "credential dump", "credential dumping", "credential theft", hacktool]
+      mitre_techniques: [T1003, T1558]
+    base_severity: high
+    true_positive_min_severity: high
+    immediate_actions: [isolate_device]
+    immediate_min_severity: high
+    true_positive_actions: [isolate_device, stop_and_quarantine_file, collect_investigation_package]
+    undetermined_actions: [collect_investigation_package]
+    next_steps:
+      - Assume every credential cached on the host is compromised; rotate privileged credentials used there.
+      - Review 4624/4672 logon events from the host for lateral movement.
+      - If a domain controller is involved, engage the AD recovery runbook.
+
+  - name: credential_compromise
+    description: Account takeover signals (impossible travel, spray, risky sign-ins).
+    priority: 30
+    match:
+      keywords:
+        - impossible travel
+        - atypical travel
+        - unfamiliar sign-in
+        - suspicious sign-in
+        - password spray
+        - brute force
+        - anomalous token
+        - leaked credentials
+      mitre_techniques: [T1078, T1110]
+    base_severity: medium
+    true_positive_min_severity: high
+    true_positive_actions: [disable_user, block_ip]
+    next_steps:
+      - Contact the user out-of-band to confirm the sign-ins were not theirs.
+      - Reset password, re-register MFA and review mailbox rules / OAuth consents.
+      - Re-enable the account (rollback) once the user is re-secured.
+
+  - name: command_and_control
+    description: Beaconing / C2 traffic from an endpoint.
+    priority: 40
+    match:
+      categories: [CommandAndControl]
+      keywords: [c2, "command and control", beacon, "cobalt strike", sliver]
+      mitre_techniques: [T1071, T1571, T1105]
+    base_severity: high
+    true_positive_min_severity: high
+    immediate_actions: [isolate_device]
+    immediate_min_severity: high
+    true_positive_actions: [isolate_device, block_ip, collect_investigation_package]
+    undetermined_actions: [collect_investigation_package]
+    next_steps:
+      - Identify the process responsible for the beacon and its persistence mechanism.
+      - Hunt for the C2 IPs/domains across the fleet and proxy logs.
+
+  - name: malware
+    description: Commodity malware, trojans, PUAs.
+    priority: 50
+    match:
+      categories: [Malware]
+      keywords: [malware, trojan, backdoor, virus, worm, "potentially unwanted", infostealer]
+    base_severity: medium
+    true_positive_min_severity: high
+    immediate_actions: [isolate_device]
+    immediate_min_severity: medium
+    true_positive_actions: [isolate_device, stop_and_quarantine_file, block_ip, run_av_scan]
+    undetermined_actions: [collect_investigation_package, run_av_scan]
+    next_steps:
+      - Determine the delivery vector (email, download, USB) from the device timeline.
+      - Confirm the full AV scan is clean before releasing isolation.
+      - Hunt for the hash across the fleet.
+
+  - name: phishing
+    description: Malicious email / URL click.
+    priority: 60
+    match:
+      categories: [Phishing]
+      keywords: [phish, phishing, "malicious url", "malicious email"]
+    base_severity: medium
+    true_positive_actions: [block_ip]
+    next_steps:
+      - Purge the message from all mailboxes and block the sender.
+      - Identify users who clicked and review their sign-ins.
+
+  - name: suspicious_activity
+    description: Anything else. Gather evidence and hand to the queue.
+    priority: 1000
+    base_severity: low
+    undetermined_actions: [collect_investigation_package]
+    true_positive_actions: [collect_investigation_package]
+    next_steps:
+      - Review the device timeline around the alert time and decide on containment.

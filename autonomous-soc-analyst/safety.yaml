@@ -1,0 +1,74 @@
+# =============================================================================
+# Safety policy for the Autonomous SOC Analyst — owned by the PLATFORM ADMIN.
+#
+# Separate from ir_policy.yaml on purpose: the SOC tunes *how* the agent responds;
+# this file bounds *what it can ever do*. Integrity-monitored: any change while the
+# agent runs trips the kill switch. After editing, run `python -m soc_agent admin seal`.
+# =============================================================================
+
+# The only action types the agent may ever execute. Remove one to revoke it globally
+# (e.g. drop disable_user while you build trust). Anything else = capability violation.
+allowed_actions:
+  - isolate_device
+  - release_device
+  - stop_and_quarantine_file
+  - collect_investigation_package
+  - run_av_scan
+  - block_ip
+  - unblock_ip
+  - disable_user
+  - enable_user
+
+# The agent must never act on itself, its credentials, or the people who oversee it.
+# Any attempt is treated as a breakout: blocked, admin alerted, kill switch tripped.
+self_identities:
+  hostnames: [soc-agent-01, soc-agent-02]
+  device_ids: []                 # Defender machine ids of the agent's hosts
+  accounts:                      # service accounts + admins (UPN, sAMAccountName, object id)
+    - svc-soc-agent
+    - svc-soc-agent@contoso.com
+    - secadmin@contoso.com
+  ips: []                        # the agent's egress IPs and management-plane addresses
+
+circuit_breaker:
+  window_minutes: 10
+  max_containment_actions: 25    # across ALL cases; beyond this the kill switch trips
+  max_denials: 3                 # safety denials in the window before a forced trip
+  max_connector_failures: 20     # admin alert only
+
+restart_guard:                   # "self-healing" detection
+  window_minutes: 10
+  max_restarts: 3
+
+integrity:
+  check_interval_seconds: 30
+  require_manifest_in_live_mode: true
+
+runtime_guard:
+  enabled: true
+  block_process_spawn: true      # the agent never needs a shell
+
+# Events that trip the kill switch automatically (level "actions": no more changes to
+# any system; triage and reports continue so humans still get the ground work).
+trip_on:
+  - egress_violation
+  - scope_violation
+  - self_targeting
+  - capability_violation
+  - self_modification
+  - self_heal_attempt
+  - process_spawn_attempt
+  - audit_tamper_attempt
+  - restart_loop
+  - circuit_breaker
+  - repeated_denials
+  - integrity_unverified
+
+# Events that escalate to a FULL stop (no alert processing at all).
+full_stop_on:
+  - self_modification
+  - self_heal_attempt
+  - process_spawn_attempt
+  - audit_tamper_attempt
+
+alert_dedupe_seconds: 60

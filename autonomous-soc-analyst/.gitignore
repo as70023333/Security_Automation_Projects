@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.env
+data/
+reports/
+sim_output/
+integrity.lock
+*.db
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
