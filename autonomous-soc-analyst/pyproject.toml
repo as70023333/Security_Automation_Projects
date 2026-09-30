@@ -1,0 +1,18 @@
+[project]
+name = "soc-agent"
+version = "1.0.0"
+description = "Autonomous SOC Analyst (Tier-1): detect, contain, report in <28s, with a safety layer."
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+# Correctness-focused ruleset (UP/SIM/I modernization nits intentionally not enforced).
+select = ["E", "F", "W", "B"]
+ignore = ["E501", "B008"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
